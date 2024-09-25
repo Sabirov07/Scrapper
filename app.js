@@ -8,36 +8,70 @@ async function scrapeChiefAI() {
   const page = await browser.newPage();
 
   try {
-    // Navigate to the login page
+    console.log('Navigating to login page...');
     await page.goto('https://www.chiefaioffice.xyz/login');
 
-    // Fill in the login form
+    console.log('Filling in login form...');
     await page.type('input[type="email"]', process.env.EMAIL);
     await page.type('input[type="password"]', process.env.PASSWORD);
 
-    // Click the login button and wait for navigation
+    console.log('Submitting login form...');
     await Promise.all([
       page.click('button[type="submit"]'),
       page.waitForNavigation({ waitUntil: 'networkidle0' }),
     ]);
 
-    // Navigate to the specific page we want to scrape
+    console.log('Navigating to target page...');
     await page.goto('https://www.chiefaioffice.xyz/p/8-ai-startups-raise-180m', { waitUntil: 'networkidle0' });
 
-    // Extract the content
-    const content = await page.evaluate(() => {
-      const title = document.querySelector('h1').innerText;
-      const paragraphs = Array.from(document.querySelectorAll('p')).map(p => p.innerText);
-      const startups = Array.from(document.querySelectorAll('h5')).map(h5 => h5.innerText);
+    console.log('Extracting startup information...');
+    const startups = await page.evaluate(() => {
+      console.log('Inside page.evaluate...');
+      const allElements = document.body.innerText;
+      console.log('All text content:', allElements);
 
-      return {
-        title,
-        paragraphs,
-        startups,
-      };
+      const startupElements = Array.from(document.querySelectorAll('h5, p'));
+      console.log('Number of h5 and p elements:', startupElements.length);
+
+      const startups = [];
+      let currentStartup = null;
+
+      startupElements.forEach((element) => {
+        const text = element.innerText.trim();
+        console.log('Element text:', text);
+
+        if (text.startsWith('→')) {
+          if (currentStartup) {
+            startups.push(currentStartup);
+          }
+          currentStartup = { name: text };
+        } else if (currentStartup) {
+          currentStartup.details = (currentStartup.details || '') + text + '\n';
+        }
+      });
+
+      if (currentStartup) {
+        startups.push(currentStartup);
+      }
+
+      console.log('Number of startups found:', startups.length);
+      return startups;
     });
 
-    console.log(content);
+    console.log('Startups extracted:', startups);
+
+    if (startups.length === 0) {
+      console.log('No startups found. Logging entire page content:');
+      const pageContent = await page.content();
+      console.log(pageContent);
+    } else {
+      startups.forEach((startup, index) => {
+        console.log(`Startup ${index + 1}:`);
+        console.log(startup.name);
+        console.log(startup.details);
+        console.log('-------------------');
+      });
+    }
 
   } catch (error) {
     console.error('An error occurred:', error);
